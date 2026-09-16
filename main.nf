@@ -67,6 +67,36 @@ workflow {
 }
 
 // ---------------------------------------------------------- provenance record
+// Nextflow only populates workflow.commitId when the pipeline is run AS A
+// PROJECT (`nextflow run owner/repo`). Running a local `main.nf` -- which is how
+// most people develop -- leaves it null, so the run manifest would record no
+// code identity at all. Read git directly instead, so provenance works either
+// way.
+def readGitInfo() {
+    def dir = workflow.projectDir.toString()
+    def run = { cmd ->
+        try {
+            def p = ["bash", "-c", "git -C '${dir}' ${cmd} 2>/dev/null"].execute()
+            p.waitFor()
+            return p.exitValue() == 0 ? p.text.trim() : ''
+        } catch (Exception e) { return '' }
+    }
+    def commit = run('rev-parse HEAD')
+    if (!commit) {
+        return [commit: 'n/a (not a git checkout)', branch: 'n/a',
+                state: 'n/a', remote: 'n/a']
+    }
+    def dirty = run('status --porcelain')
+    return [
+        commit : commit,
+        branch : run('rev-parse --abbrev-ref HEAD') ?: 'detached',
+        // a dirty tree means the recorded commit does NOT describe what ran
+        state  : dirty ? 'MODIFIED (uncommitted changes -- commit does not describe this run)' : 'clean',
+        remote : run('config --get remote.origin.url') ?: 'none'
+    ]
+}
+def gitInfo = readGitInfo()
+
 workflow.onComplete {
     def dir = file("${params.outdir}/pipeline_info")
     dir.mkdirs()
@@ -97,8 +127,10 @@ workflow.onComplete {
 
         [pipeline]
         version          = ${workflow.manifest.version}
-        revision         = ${workflow.revision ?: 'n/a (not a git checkout)'}
-        commit           = ${workflow.commitId ?: 'n/a (not a git checkout)'}
+        revision         = ${gitInfo.branch}
+        commit           = ${gitInfo.commit}
+        working_tree     = ${gitInfo.state}
+        remote           = ${gitInfo.remote}
         project_dir      = ${workflow.projectDir}
 
         [execution]

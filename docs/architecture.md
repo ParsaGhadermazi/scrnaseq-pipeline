@@ -208,3 +208,39 @@ crash is obvious; a silently wrong result reaches a paper.
 | no plausible markers | SoupX finds no genes for `autoEstCont` | refuses to guess a contamination fraction |
 
 All are covered by `tests/run_guard_tests.sh`.
+
+
+---
+
+## Provenance
+
+Every run writes `results/pipeline_info/run_manifest.txt`:
+
+```
+[pipeline]
+version          = 0.2.0
+revision         = main
+commit           = 1705942415c87dfb99555ac20c64ecf67e9d23f9
+working_tree     = clean
+remote           = https://github.com/ParsaGhadermazi/scrnaseq-pipeline.git
+```
+
+Git metadata is read **directly from the repository**, not from
+`workflow.commitId`. Nextflow only populates that when a pipeline is run as a
+project (`nextflow run owner/repo`); running a local `main.nf` -- how most people
+develop -- leaves it null, so the manifest would silently record no code identity.
+
+`working_tree` is the part that matters. If it says:
+
+```
+working_tree = MODIFIED (uncommitted changes -- commit does not describe this run)
+```
+
+then the recorded commit does **not** describe the code that produced those
+results. A commit hash attached to a dirty tree is worse than no hash, because it
+looks authoritative.
+
+Alongside it: `software_versions.yml` (captured from the running binaries, not
+hardcoded), the container image and digest, the full resolved parameter set, and
+`environment.lock.yml` inside the image itself -- which is per-architecture and
+is the artifact that actually pins a run.
