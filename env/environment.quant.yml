@@ -1,0 +1,23 @@
+# Quantifier stack. THIS FILE IS THE SINGLE SOURCE OF TRUTH for these pins --
+# containers/install_quantifiers.sh reads the specs straight out of it, so the
+# two cannot drift apart.
+#
+# Verified present on BOTH linux-64 and linux-aarch64 (checked against bioconda
+# 2026-08). The script still carries per-package source-build fallbacks in case
+# a future pin has no build for the target arch.
+#
+# cellranger is deliberately absent: 10x Genomics' licence forbids
+# redistribution. It is bind-mounted from params.cellranger_path at runtime.
+name: scrnaseq
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - sra-tools>=3.2          # prefetch, fasterq-dump
+  - salmon>=1.10            # required by simpleaf
+  - alevin-fry>=0.8         # aarch64 tops out at 0.9.0 -- do NOT pin >=0.11
+  - simpleaf>=0.19
+  - kallisto>=0.50
+  - bustools>=0.43
+  - kb-python>=0.28         # wrapper; its bundled binaries are x86_64 only
+  - pyroe>=0.9              # alevin-fry output -> AnnData

@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema",
+  "title": "myRNASeqPipeline samplesheet",
+  "description": "Experiment manifest. Declared ONCE and reused by every stage, so experimental design is never re-entered -- that is where samples get mismatched. Unreserved columns are carried verbatim into the meta map and land in adata.obs.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "sample": {
+        "type": "string",
+        "pattern": "^\\S+$",
+        "errorMessage": "sample is required and cannot contain spaces"
+      },
+      "srr": {
+        "type": "string",
+        "pattern": "^[SED]RR[0-9]+$",
+        "help_text": "stage counts: SRA accession. Alternative to fastq_1/fastq_2."
+      },
+      "fastq_1": {
+        "type": "string",
+        "pattern": "^\\S+\\.f(ast)?q\\.gz$"
+      },
+      "fastq_2": {
+        "type": "string",
+        "pattern": "^\\S+\\.f(ast)?q\\.gz$"
+      },
+      "counts": {
+        "type": "string",
+        "help_text": "stage counts with --step counts: the quantifier's output directory."
+      },
+      "chemistry": {
+        "type": "string",
+        "enum": [
+          "SC3Pv2",
+          "SC3Pv3",
+          "SC5P-PE",
+          "SC5P-R2",
+          "auto"
+        ],
+        "help_text": "Optional override. Omit to auto-detect from R1 length; a declaration contradicting the read length is a hard error."
+      },
+      "expect_cells": {
+        "type": "integer",
+        "minimum": 100
+      },
+      "condition": {
+        "type": "string",
+        "help_text": "Biological group. Consumed by Part 5 (DE). NEVER use as batch_key."
+      },
+      "batch": {
+        "type": "string",
+        "help_text": "TECHNICAL grouping (chip, run, prep day). Defaults to sample. Consumed by integration in stage qc."
+      }
+    },
+    "required": [
+      "sample"
+    ],
+    "anyOf": [
+      {
+        "required": [
+          "srr"
+        ]
+      },
+      {
+        "required": [
+          "fastq_1",
+          "fastq_2"
+        ]
+      },
+      {
+        "required": [
+          "counts"
+        ]
+      },
+      {
+        "description": "stage qc locates <counts_dir>/<sample>.h5ad by convention, so no file column is needed"
+      }
+    ]
+  }
+}

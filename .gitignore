@@ -1,0 +1,12 @@
+work/
+results*/
+out*/
+references/
+.nextflow*
+dag_*.mmd
+*.h5ad
+*.fastq*
+*.bam
+refdata-*/
+__pycache__/
+.DS_Store

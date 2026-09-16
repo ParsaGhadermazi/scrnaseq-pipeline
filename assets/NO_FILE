@@ -1,0 +1,4 @@
+# Sentinel for optional Nextflow process inputs.
+# Modules test `file.name != 'NO_FILE'` to decide whether an optional
+# input was supplied (e.g. doublet calls when doublet_method = none).
+# Must not be empty: zero-byte files do not survive every checkout.

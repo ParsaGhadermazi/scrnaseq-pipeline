@@ -1,0 +1,35 @@
+# R stack for Part 2 (QC) and Part 3 (integration).
+# Read by containers/install_r_packages.sh, which is conda-first and falls back
+# to BiocManager/remotes when a package has no build for the target arch.
+#
+# NOTE: bioconda's linux-aarch64 coverage for Bioconductor is patchy. Expect
+# some of these to take the source path on arm64; the build log records which.
+name: scrnaseq
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.5        # must match the pinned file written by install_r_packages.sh
+  - r-biocmanager
+  - r-remotes
+  # --- core objects / IO ---
+  - bioconductor-singlecellexperiment
+  - bioconductor-zellkonverter        # .h5ad <-> SCE
+  - bioconductor-rhdf5                # needed for reader="R" (see below)
+  # --- Part 2: empty droplets, ambient, doublets, QC ---
+  - bioconductor-dropletutils         # emptyDrops
+  - r-soupx                           # ambient, global rho
+  - bioconductor-celda                # DecontX, per-cell ambient
+  - bioconductor-scdblfinder          # doublets (default)
+  - bioconductor-scuttle              # isOutlier -> MAD thresholds
+  - bioconductor-scater
+  - bioconductor-miqc                 # mixture-model mito filtering
+  # --- Part 3: integration ---
+  - r-seurat>=5
+  - r-seuratobject
+  - r-harmony
+  - bioconductor-batchelor            # FastMNN
+  # --- plotting ---
+  - r-ggplot2
+  - r-patchwork
+  - r-dplyr

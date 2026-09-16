@@ -1,0 +1,34 @@
+# Arch-safe core. Everything here resolves on both linux-64 and linux-aarch64.
+# Lower bounds only -- the authoritative record is environment.lock.yml,
+# generated from the built image (see containers/Dockerfile).
+name: scrnaseq
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # --- core python ---
+  - python=3.11            # 3.14 (host default) is ahead of this stack
+  - pip
+  - pyyaml
+  # --- read QC ---
+  - fastqc>=0.12           # java, arch-independent
+  - multiqc>=1.25          # pure python
+  # --- general utils ---
+  - pigz
+  - samtools>=1.21
+  # --- h5ad handoff (Part 1 closes by writing .h5ad) ---
+  - anndata>=0.10
+  - scanpy>=1.10
+  - h5py
+  - numpy<2.1
+  - pandas>=2.2
+  - scipy
+  # --- Part 2/3 python side ---
+  - scikit-learn
+  - leidenalg
+  - python-igraph
+  - harmonypy               # same algorithm as R harmony
+  - scrublet                # doublets, python
+  - doubletdetection        # doublets, python
+  - matplotlib-base
+  - seaborn
