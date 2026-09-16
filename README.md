@@ -1,35 +1,52 @@
-# myRNASeqPipeline
+# scrnaseq-pipeline
 
 A single-cell RNA-seq pipeline built step by step against the
 [ngs101 tutorial series](https://ngs101.com/tutorials/#single-cell-seq), with the
 reasoning written down as it was worked out.
 
 Nextflow DSL2 orchestration over Python and R scripts, in one multi-arch
-container. Runs **one stage at a time**.
+container. Runs **one stage at a time**, so you can iterate on clustering without
+re-running ambient correction.
+
+```mermaid
+flowchart LR
+    SS["samplesheet.csv<br/>+ FASTQ"] --> C["<b>counts</b><br/>Part 1<br/><sub>11/11 ✓</sub>"]
+    C --> H["per-sample<br/>.h5ad"]
+    H --> Q["<b>qc</b><br/>Parts 2, 2-2, 3<br/><sub>11/11 ✓</sub>"]
+    Q --> M["merged, integrated<br/>.h5ad"]
+    M -.-> A["<b>annotate</b><br/>Part 4"]
+    A -.-> D["<b>de</b><br/>Part 5"]
+
+    style C fill:#2d6a4f,color:#fff
+    style Q fill:#2d6a4f,color:#fff
+    style A fill:#495057,color:#fff,stroke-dasharray: 5 5
+    style D fill:#495057,color:#fff,stroke-dasharray: 5 5
+```
 
 ## Status
 
-| Stage | Parts | State |
+| Stage | Tutorial parts | State |
 |---|---|---|
-| `counts` — FASTQ → count matrices | 1 | **tested**, 11/11 on image v0.2.0 |
-| `qc` — QC, ambient, doublets, merge, integrate | 2, 2-2, 3 | **tested**, 11/11 on image v0.2.0 |
+| `counts` — FASTQ → count matrices | 1 | **11/11 passing**, cross-quantifier concordance r = 1.0000 |
+| `qc` — QC, ambient, doublets, merge, integrate | 2, 2-2, 3 | **11/11 passing**, 32 tasks |
+| refusal guards | — | **2/2 passing** |
 | `annotate` | 4 | not started |
 | `de` | 5 | not started |
 
-Both stages run end to end against synthetic fixtures with known ground truth,
-and the refusal guards pass. Stage `qc`'s suite asserts not just that integration
-*ran* but that it **did something**: `X_integrated` must differ from `X_pca`, and
-batch silhouette must decrease against the planted batch effect.
+Tested against synthetic fixtures with **known ground truth** — planted cell
+counts, doublets, contamination fraction and batch effect — so results are
+checked by equality rather than by eye.
 
-Known unverified: Cell Ranger modules (need the licensed x86_64 binary and
-~32–64 GB RAM) and the three index builders — deferred to cluster testing. See
-[`docs/COVERAGE.md`](docs/COVERAGE.md) for per-module status; nothing is marked
-done that has not run, and figures are retired when the fixture they were
-measured on changes.
+**Not verified:** Cell Ranger modules and the three index builders need the
+licensed x86_64 binary and ~32–64 GB RAM, so they are deferred to cluster
+testing. [`docs/COVERAGE.md`](docs/COVERAGE.md) marks nothing done that has not
+run, and retires figures when the fixture they were measured on changes.
 
 ## Quickstart
 
 ```bash
+docker pull parsaghadermazi/myrnaseqpipeline:0.2.0
+
 # stage 1 — reads to count matrices
 nextflow run main.nf -profile docker \
   --stage counts --input samplesheet.csv --outdir results \
@@ -40,67 +57,71 @@ nextflow run main.nf -profile docker \
   --stage qc --input samplesheet.csv --outdir results
 ```
 
-Samplesheet — only `sample` plus a source is required:
+Full walkthrough: **[docs/getting-started.md](docs/getting-started.md)**.
 
-```csv
-sample,srr,condition,batch
-PBMC_healthy_1,SRR14575500,healthy,run1
+## Documentation
+
+**Start here**
+
+| | |
+|---|---|
+| [getting-started.md](docs/getting-started.md) | requirements, first run, what you get |
+| [architecture.md](docs/architecture.md) | diagrams of both stages, the Python/R boundary, the `.h5ad` contract |
+| [parameters.md](docs/parameters.md) | every parameter and its default |
+
+**Concepts** — the biology and methods, from first principles
+
+| | |
+|---|---|
+| [01 — FASTQ to count matrix](docs/lectures/01-fastq-to-counts.md) | barcodes, UMIs, Poisson loading, EmptyDrops, chemistry |
+| [02 — QC and cell filtering](docs/lectures/02-qc.md) | ambient RNA, doublets, MAD thresholds, normalisation, HVGs |
+| [03 — Integration](docs/lectures/03-integration.md) | batch effects, confounding, anchors, what Harmony actually modifies |
+
+**Reference**
+
+| | |
+|---|---|
+| [usage.md](docs/usage.md) | detailed per-stage usage |
+| [reference.md](docs/reference.md) | references and index building |
+| [COVERAGE.md](docs/COVERAGE.md) | every tutorial tool vs what is implemented and verified |
+| [testing.md](docs/testing.md) | the fixtures, and what each suite asserts |
+| [python-r-bridge.md](docs/python-r-bridge.md) | why no R module writes `.h5ad`, and upstream version traps |
+| [design.md](design.md) | design principles and why |
+
+## Testing
+
+```bash
+tests/run_tests.sh        /tmp/t1   # stage counts  — 11/11
+tests/run_guard_tests.sh  /tmp/t2   # refusals      — 2/2
+tests/run_qc_tests.sh     /tmp/t3   # stage qc      — 11/11
 ```
+
+The guard suite covers the failures that matter most — a design where batch is
+perfectly confounded with condition, and a missing raw matrix. Both must be
+**refused**: a run that silently removes the treatment effect and emits a
+clean-looking object is far more dangerous than a crash.
 
 ## Container
 
-Published multi-arch on Docker Hub — `linux/amd64` and `linux/arm64`:
+Published multi-arch (`linux/amd64` + `linux/arm64`), both resolving to identical
+package versions:
 
 ```bash
 docker pull parsaghadermazi/myrnaseqpipeline:0.2.0
 ```
 
-`params.container_image` already points at it, so `-profile docker` pulls it
-automatically. To rebuild locally instead:
-
-```bash
-docker buildx create --name scrnabuilder --driver docker-container --bootstrap   # once
-docker buildx build --builder scrnabuilder --platform linux/amd64,linux/arm64 \
-  -f containers/Dockerfile -t parsaghadermazi/myrnaseqpipeline:0.2.0 --push .
-```
-
-The default `docker` buildx driver **cannot** produce multi-platform manifests —
-it fails with `Multi-platform build is not supported for the docker driver`.
-
 Cell Ranger is deliberately absent — 10x's licence forbids redistributing it.
 Supply it with `--cellranger_path`.
 
-## Documentation
+## Design principles
 
-| | |
-|---|---|
-| [usage.md](docs/usage.md) | running each stage, parameters, output contract |
-| [reference.md](docs/reference.md) | references and index building |
-| [COVERAGE.md](docs/COVERAGE.md) | every tutorial tool vs what is implemented |
-| [testing.md](docs/testing.md) | synthetic fixtures and what has been verified |
-| [python-r-bridge.md](docs/python-r-bridge.md) | why no R module writes `.h5ad` |
-| [design.md](design.md) | design principles and why |
+- **Fail loudly rather than emit quietly-wrong output.** Wrong chemistry, a
+  collapsed barcode fraction, a confounded design — all stop the run.
+- **Record what was actually used, not what was requested.** Versions are
+  captured from running binaries; the conda lock is generated *inside* the image.
+- **Raw counts are never overwritten.** `layers["counts"]` survives every stage,
+  because DE must never run on corrected values.
+- **Interfaces before implementations.** Adding a quantifier is a module plus a
+  reader function, not a refactor.
 
-### Lecture notes
-
-The concepts behind each stage, written up as they were worked through:
-
-- [01 — FASTQ to count matrix](docs/lectures/01-fastq-to-counts.md)
-- [02 — QC and cell filtering](docs/lectures/02-qc.md)
-- [03 — Integration](docs/lectures/03-integration.md)
-
-## Testing
-
-```bash
-tests/run_tests.sh        # stage counts — 11/11 passing on v0.2.0
-tests/run_guard_tests.sh  # refusals     — 2/2 passing
-tests/run_qc_tests.sh     # stage qc     — 11/11 passing on v0.2.0
-```
-
-`run_guard_tests.sh` covers the failures that matter most: a design where batch
-is perfectly confounded with condition, and a missing `.raw.h5ad`. Both must be
-**refused** — a run that silently removes the treatment effect and emits a
-clean-looking object is far more dangerous than a crash.
-
-Both build synthetic fixtures with known ground truth, so results are checked by
-equality rather than by eye.
+Full rationale: [design.md](design.md).
