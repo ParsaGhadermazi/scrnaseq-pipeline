@@ -22,7 +22,13 @@ process CELLRANGER_COUNT {
     def expect    = meta.expect_cells ? "--expect-cells=${meta.expect_cells}" : ''
     """
     export PATH=/opt/cellranger:\$PATH
-    mkdir -p fastqs && cp -L ${reads} fastqs/
+    # Nextflow already staged these into the task dir; `cp -L` would duplicate
+    # every FASTQ physically (~28 GB each for GSE174609) and burn inodes twice.
+    # Relative symlinks resolve to the staged files, which are guaranteed
+    # readable inside the container -- an absolute symlink could point outside
+    # the bind-mounted paths and break under Apptainer.
+    mkdir -p fastqs
+    for f in ${reads}; do ln -sf "../\$f" "fastqs/\$f"; done
 
     cellranger count \\
         --id=${meta.id} \\
